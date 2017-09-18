@@ -13,21 +13,22 @@ They would only response to "hello" world message. When such messages come along
 they will send their profile back.
 
 1. This is the format that the payload would look at the Ping (initiator of multicast)
-  - base64 ecode and decode are used
-  - ed25519 is used for hash signature and verification
-  - Hello_message ::= "ipv4_hello" Or "ipv4_hello_tunnel"
-  - Hello_message is not encoded , just plane ascii.
-  - It is the playload header.
-  - Each individual item in the payload is separated by empty space
-  - Following the header are 
-	 - public_key ::= encoded public_key
-     - ip_address ::= encoded ip_address
-	 - udp_port ::= encoded udp_port
-	 - created_time_utc ::= encoded timestamp
-	 - seqnum ::= integer
+	- base64 ecode and decode are used
+	- ed25519 is used for hash signature and verification
+	- Hello_message ::= "ipv4_hello" Or "ipv4_hello_tunnel"
+	- Hello_message is not encoded , just plane ascii.
+	- It is the playload header.
+	- Each individual item in the payload is separated by empty space
+  
+	- Following the header are 
+		- public_key ::= encoded public_key
+		- ip_address ::= encoded ip_address
+		- udp_port ::= encoded udp_port
+		- created_time_utc ::= encoded timestamp
+		- seqnum ::= integer
 The above payload is hash signed and the hash result appended to the above.
 
-2.At the Pong (daemon).
+2.	At the Pong (daemon).
 	- It reads the above , if header is correct, it then splits the received message
 	- It would verify the hash sign using public key. It passes, it would build and send return payload
 	- base64 ecode and decode are used
