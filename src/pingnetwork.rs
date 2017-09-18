@@ -14,9 +14,17 @@ use types::{ENDPORT, Account, Neighbor};
 
 const BUFFER_CAPACITY:usize = 4096;
 
-fn create_socket(ipadr: String, port: String) -> UdpSocket{
+fn create_socket(
+	ipadr: String, 
+	port: String
+) -> UdpSocket {
 	let separation = ":".to_string();
-	let ip_and_port = format!("{}{}{}", ipadr, separation, port);
+	let ip_and_port = format!(
+		"{}{}{}", 
+		ipadr, 
+		separation, 
+		port
+	);
 	let socket = match UdpSocket::bind(ip_and_port) {
 		Ok(s) => s,
 		Err(e) => panic!("Failed to establish bind socket {}", e)
@@ -39,8 +47,16 @@ pub struct PingUpdNetworkProfile {
 }
 
 impl PingUpdNetworkProfile {
-	pub fn new(rx_ip_address: String, rx_udp_port: String,tx_ip_address: String, tx_udp_port: String, public_key: String, private_key: [u8; 64],
-		tunnel_private_key: [u8; 64],tunnel_public_key: String) -> PingUpdNetworkProfile{
+	pub fn new(
+		rx_ip_address: String, 
+		rx_udp_port: String,
+		tx_ip_address: String, 
+		tx_udp_port: String, 
+		public_key: String, 
+		private_key: [u8; 64],
+		tunnel_private_key: [u8; 64],
+		tunnel_public_key: String
+) -> PingUpdNetworkProfile {
 		let mbuf = BytesMut::with_capacity(BUFFER_CAPACITY);
 		let neighbors = Neighbors::new();
 		let cloned_tx_ipadr = tx_ip_address.clone();
@@ -70,8 +86,7 @@ impl PingUpdNetworkProfile {
 		let pub_key;
 		let joined;
 		match self.rx.recv_from(&mut self.buf[..]) {
-			Ok((nbytes, saddr)) => {
-			},
+			Ok((nbytes, saddr)) => {},
 			Err(e) => panic!("recv_from error: {}", e),
 		};
 		let mut param = self.buf[..].to_vec();
@@ -89,23 +104,14 @@ impl PingUpdNetworkProfile {
 		match ed25519::verify(joined.as_bytes(), &sig, &pub_key) {
 			true => {
 				match mvec[0] {
-					
 					"ipv4_hello_confirm" => {
 						self.direct_connected_nodes.add_to_table(serialization::build_neighbor(mvec, 0));
-						
-					},
-					"ipv4_tunnel_confirm" => {
-						self.direct_connected_nodes.add_to_table(serialization::build_neighbor(mvec, 1));
 					},
 					_ => { panic!("Failed to interpret message"); }
 				};
 			},
-			false => {
-				
-			},
+			false => {return;},
 		};
-			
-
 	}
 	
 	pub fn send_data(&self,  buf: &mut BytesMut){
@@ -119,7 +125,6 @@ impl PingUpdNetworkProfile {
 			Err(e) => panic!("Failed to send data through the network {}", e),
 		};
 		buf.clear();
-		println!("Leaving Send data");
 	}
 	
 	pub fn close(mut self){

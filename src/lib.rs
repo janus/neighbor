@@ -2,8 +2,10 @@ extern crate bytes;
 extern crate edcert;
 extern crate base64;
 extern crate chrono;
+extern crate mio;
 
-mod network;
+
+mod pingnetwork;
 
 mod serialization;
 
@@ -16,5 +18,6 @@ mod types;
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {}
+    fn it_works() {
+    }
 }
