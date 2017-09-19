@@ -9,9 +9,6 @@ use pingnetwork::PingUpdNetworkProfile;
 use types::{ENDPORT, Account, Neighbor, Tunnel};
 //use neighbor::Neighbors;
 
-
-
-
 const BUFFER_CAPACITY_MESSAGE:usize = 4096;
 
 ///To be filtered out a bit
@@ -25,12 +22,14 @@ pub fn ping_msg(
 	let created_time_utc = format!("{}", utc);
 	let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
 	let str_tmp = format!(
-		"{} {} {} {} {} {}", header, 
+		"{} {} {} {} {} {}", 
+		header, 
 		ping.public_key,
 		encode(&ping.end_port.ip_address),
 		encode(&ping.end_port.udp_port),
 		encode(&created_time_utc),
-		ping.seqnum);
+		ping.seqnum
+	);
 	let sig = ed25519::sign(str_tmp.as_bytes(), &ping.private_key);
 	rslt.put(str_tmp);
 	rslt.put(" ");
