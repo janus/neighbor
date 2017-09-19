@@ -8,7 +8,7 @@ use edcert::ed25519;
 use mio::{PollOpt, Token};
 use neighbor::{Neighbors};
 use serialization;
-use types::{ENDPORT, Account, Neighbor};
+use types::{ENDPORT, Neighbor};
 
 
 
@@ -83,9 +83,9 @@ impl PingUpdNetworkProfile {
 			Ok((nbytes, saddr)) => {},
 			Err(e) => panic!("recv_from error: {}", e),
 		};
-		let mut msg_buf = self.buf[..].to_vec();
-		let mut str_buf = String::from_utf8(msg_buf).expect("Found invalid UTF-8");
-		let mut mvec = str_buf.split_whitespace().collect::<Vec<&str>>();
+		let msg_buf = self.buf[..].to_vec();
+		let str_buf = String::from_utf8(msg_buf).expect("Found invalid UTF-8");
+		let mvec = str_buf.split_whitespace().collect::<Vec<&str>>();
 		sig = match decode(&mvec[mvec.len() - 1]) {
 			Ok(v) => v,
 			Err(e) => panic!("Failed to decode signature, {}", e),
@@ -121,7 +121,7 @@ impl PingUpdNetworkProfile {
 		buf.clear();
 	}
 	
-	pub fn close(mut self){
+	pub fn close(self){
 		drop(self.tx);
 		drop(self.rx);
 	}
