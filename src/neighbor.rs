@@ -1,7 +1,7 @@
 //use bytes::{BytesMut, Buf, Bytes};
 
 use std::collections::HashMap;
-use types::{ENDPORT, Account, Neighbor};
+use types::{ Neighbor};
 
 
 pub struct Neighbors {
@@ -12,7 +12,7 @@ pub struct Neighbors {
 impl Neighbors {
 	pub fn new() -> Neighbors{
 		let mut members: HashMap<String, Neighbor> = HashMap::new();
-		
+
 		Neighbors{
 			members,
 			host_status_num: 0,

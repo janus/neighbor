@@ -1,7 +1,7 @@
 
 use bytes::{BytesMut, Buf, BufMut};
-use std::time::Duration;
-use std::thread;
+//use std::time::Duration;
+//use std::thread;
 use std::net::UdpSocket;
 use base64::{encode, decode};
 use edcert::ed25519;
@@ -40,8 +40,6 @@ pub struct PingUpdNetworkProfile {
 	pub private_key: [u8; 64],
 	pub seqnum: usize,
 	pub status_num: usize,
-	pub tunnel_public_key: String,
-	tunnel_private_key: [u8; 64],
 	pub end_port: ENDPORT,
 	pub direct_connected_nodes: Neighbors,
 }
@@ -53,9 +51,7 @@ impl PingUpdNetworkProfile {
 		tx_ip_address: String, 
 		tx_udp_port: String, 
 		public_key: String, 
-		private_key: [u8; 64],
-		tunnel_private_key: [u8; 64],
-		tunnel_public_key: String
+		private_key: [u8; 64]
 ) -> PingUpdNetworkProfile {
 		let mbuf = BytesMut::with_capacity(BUFFER_CAPACITY);
 		let neighbors = Neighbors::new();
@@ -72,8 +68,6 @@ impl PingUpdNetworkProfile {
 			end_port: end_port,
 			public_key: public_key,
 			private_key: private_key,
-			tunnel_public_key: tunnel_public_key,
-			tunnel_private_key: tunnel_private_key,
 			direct_connected_nodes: neighbors,
 			status_num: 0,
 			seqnum: 0,
@@ -89,9 +83,9 @@ impl PingUpdNetworkProfile {
 			Ok((nbytes, saddr)) => {},
 			Err(e) => panic!("recv_from error: {}", e),
 		};
-		let mut param = self.buf[..].to_vec();
-		let mut strnam = String::from_utf8(param).expect("Found invalid UTF-8");
-		let mut mvec = strnam.split_whitespace().collect::<Vec<&str>>();
+		let mut msg_buf = self.buf[..].to_vec();
+		let mut str_buf = String::from_utf8(msg_buf).expect("Found invalid UTF-8");
+		let mut mvec = str_buf.split_whitespace().collect::<Vec<&str>>();
 		sig = match decode(&mvec[mvec.len() - 1]) {
 			Ok(v) => v,
 			Err(e) => panic!("Failed to decode signature, {}", e),
@@ -140,13 +134,10 @@ mod test {
 //use network::create_socket;
 //use network::UpdNetworkProfile;
 
-#[test]
-  fn test_udp() {
-    println!("UDP");
-    let ipad = String::from("127.0.0.1");
-    let pot = String::from("4567");
-    //let udp = UpdNetworkProfile::new(ipad, pot);
-   // println!("{}:{}", udp.ipaddress, udp.portnum);
+
+ #[test]
+pub fn test_udp_socket_send_recv() {
+
 }
 
 }

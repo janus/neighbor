@@ -6,8 +6,9 @@ use std::str;
 use chrono::prelude::*;
 //use pongnetwork::PongUpdNetworkProfile;
 use pingnetwork::PingUpdNetworkProfile;
-use types::{ENDPORT, Account, Neighbor, Tunnel};
-//use neighbor::Neighbors;
+use types::{ENDPORT, Neighbor};
+
+
 
 const BUFFER_CAPACITY_MESSAGE:usize = 4096;
 
@@ -49,36 +50,21 @@ fn m_decode(mstr: String) -> String {
 }
 
 pub fn build_neighbor(
-	mvec: Vec<&str>, 
+	vec_fields: Vec<&str>, 
 	ttnum: usize
 ) -> Neighbor {
-	let tunnel;
-	let listen_port;
-	if ttnum == 0 {
-		tunnel = None;	
-	}
-	else {
-		listen_port = m_decode(mvec[mvec.len() - 3].to_string());
-		tunnel = Some(
-			Tunnel {
-				public_key: mvec[mvec.len() - 4].to_string(),
-				listen_port: listen_port,
-			}
-		);
-		
-	}
-	let udp_port =  m_decode(mvec[mvec.len() - 4].to_string());
-	let ip_address = m_decode(mvec[2].to_string());
+	let	listen_port = m_decode(vec_fields[vec_fields.len() - 3].to_string());
+	let udp_port =  m_decode(vec_fields[vec_fields.len() - 4].to_string());
+	let ip_address = m_decode(vec_fields[2].to_string());
 	let end_port = ENDPORT {
 		udp_port: udp_port,
 		ip_address: ip_address,
 	};
 	Neighbor {
-		public_key: mvec[1].to_string(),
-		payment_address: mvec[1].to_string(), //should have the right address
-		seqnum: mvec[mvec.len() - 2].parse::<usize>().unwrap(),
+		public_key: vec_fields[1].to_string(),
+		payment_address: vec_fields[1].to_string(), //should have the right address
+		seqnum: vec_fields[vec_fields.len() - 2].parse::<usize>().unwrap(),
 		active:2,
-		tunnel: tunnel,
 		end_port: end_port,
 
 	}
@@ -98,63 +84,53 @@ mod test {
 	use serialization::{ping_msg, build_neighbor};
 	use std::net::UdpSocket;
 
-  fn build_network(
-	rx_ip_address: String,
-	rx_udp_port: String,
-	tx_ip_address: String,
-	tx_udp_port: String,
-	psk: String,
-	msk: [u8; 64],
-	tpsk: String,
-	tmsk: [u8; 64]	
-  ) -> PingUpdNetworkProfile {
-	let mut pg_net =  PingUpdNetworkProfile::new(
-		tx_ip_address,
-		tx_udp_port,
-		rx_ip_address, 
-		rx_udp_port, 
-		psk, 
-		msk,		
-		tmsk,
-		tpsk	
-	);
-	pg_net
+	fn build_network(
+		rx_ip_address: String,
+		rx_udp_port: String,
+		tx_ip_address: String,
+		tx_udp_port: String,
+		psk: String,
+		msk: [u8; 64]
+	) -> PingUpdNetworkProfile {
+		let mut pg_net =  PingUpdNetworkProfile::new(
+			tx_ip_address,
+			tx_udp_port,
+			rx_ip_address, 
+			rx_udp_port, 
+			psk, 
+			msk		
+		);
+		pg_net
 
   }
   
  
-  #[test]
-  fn test_send_data() {
+#[test]
+fn test_send_data() {
 	let (psk, msk ) = ed25519::generate_keypair();
-	let (tpsk, tmsk ) = ed25519::generate_keypair();
 	let mut ping_network =  build_network(
 		"127.0.0.1".to_string(),
 		"3456".to_string(),
 		"0.0.0.0".to_string(), 
 		"0".to_string(), 
 		encode(&psk), 
-		msk,
-		encode(&tpsk),
-		tmsk
+		msk
 	);
 	let mut pay_load = ping_msg("ipv4_hello".to_string(), &ping_network);    
 	ping_network.send_data(&mut pay_load);
 	ping_network.close();  
- }
+}
   
-  #[test]
-  fn test_serialization() {
+#[test]
+fn test_serialization() {
 	let (psk, msk ) = ed25519::generate_keypair();
-	let (tpsk, tmsk ) = ed25519::generate_keypair();
 	let mut ping_network =  build_network(
 		"127.0.0.3".to_string(),
 		"3456".to_string(),
 		"0.0.0.0".to_string(), 
 		"0".to_string(), 
 		encode(&psk), 
-		msk,
-		encode(&tpsk),
-		tmsk
+		msk
 	);
 	let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network); 
 	let mut ping_msg_vec = ping_str_buf[..].to_vec();
@@ -186,19 +162,18 @@ mod test {
 	
 
 }
+
+
 #[test]
-  fn test_neighbor() {
+fn test_neighbor() {
 	let (psk, msk ) = ed25519::generate_keypair();
-	let (tpsk, tmsk ) = ed25519::generate_keypair();
 	let mut ping_network =  build_network(
 		"127.0.0.0".to_string(),
 		"3456".to_string(),
 		"0.0.0.0".to_string(), 
 		"0".to_string(), 
 		encode(&psk), 
-		msk,
-		encode(&tpsk),
-		tmsk
+		msk
 	);
 	let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network); 
 	let mut ping_msg_vec = ping_str_buf[..].to_vec();
@@ -211,19 +186,16 @@ mod test {
 }
 
 
- #[test]
+#[test]
 pub fn test_udp_socket_tx_rx() {
 	let (psk, msk ) = ed25519::generate_keypair();
-	let (tpsk, tmsk ) = ed25519::generate_keypair();
 	let mut ping_network =  build_network(
 		"127.0.0.5".to_string(),
 		"3456".to_string(),
 		"0.0.0.0".to_string(), 
 		"0".to_string(), 
 		encode(&psk), 
-		msk,
-		encode(&tpsk),
-		tmsk
+		msk
 	);
 
     let tx_addr = ping_network.tx.local_addr().unwrap();
