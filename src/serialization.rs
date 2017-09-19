@@ -2,7 +2,7 @@ use base64::{encode, decode};
 use bytes::{BytesMut, BufMut, Buf};
 use edcert::ed25519;
 use std::str;
-use std::thread;
+//use std::thread;
 use chrono::prelude::*;
 //use pongnetwork::PongUpdNetworkProfile;
 use pingnetwork::PingUpdNetworkProfile;
@@ -49,7 +49,10 @@ fn m_decode(mstr: String) -> String {
 		
 }
 
-pub fn build_neighbor(mvec: Vec<&str> , ttnum: usize) -> Neighbor {
+pub fn build_neighbor(
+	mvec: Vec<&str>, 
+	ttnum: usize
+) -> Neighbor {
 	let tunnel;
 	let listen_port;
 	if ttnum == 0 {
@@ -94,132 +97,141 @@ mod test {
 	use base64::{encode, decode};
 	use pingnetwork::{PingUpdNetworkProfile};
 	use serialization::{ping_msg, build_neighbor};
+	use std::net::UdpSocket;
 
+  fn build_network(
+	rx_ip_address: String,
+	rx_udp_port: String,
+	tx_ip_address: String,
+	tx_udp_port: String,
+	psk: String,
+	msk: [u8; 64],
+	tpsk: String,
+	tmsk: [u8; 64]	
+  ) -> PingUpdNetworkProfile {
+	let mut pg_net =  PingUpdNetworkProfile::new(
+		tx_ip_address,
+		tx_udp_port,
+		rx_ip_address, 
+		rx_udp_port, 
+		psk, 
+		msk,		
+		tmsk,
+		tpsk	
+	);
+	pg_net
 
-
+  }
+  
+ 
   #[test]
   fn test_send_data() {
-	
-	let rx_ip_address = "127.0.0.1".to_string(); 
-	let rx_udp_port  = "3456".to_string(); 
-	let tx_ip_address = "0.0.0.0".to_string();
-	let tx_udp_port = "0".to_string();
-	let public_key: String;
-	let tunnel_public_key: String;
 	let (psk, msk ) = ed25519::generate_keypair();
 	let (tpsk, tmsk ) = ed25519::generate_keypair();
-	public_key = encode(&psk);
-	let public_kay = public_key.clone();
-	let public_kay_t = public_kay.clone();
-	tunnel_public_key = encode(&tpsk);
-	let pip = tx_ip_address.clone();
-	let pip_udp = tx_udp_port.clone();
-	let mut bg =  PingUpdNetworkProfile::new(
-		rx_ip_address,
-		rx_udp_port,
-		tx_ip_address, 
-		tx_udp_port, 
-		public_key, 
+	let mut ping_network =  build_network(
+		"127.0.0.1".to_string(),
+		"3456".to_string(),
+		"0.0.0.0".to_string(), 
+		"0".to_string(), 
+		encode(&psk), 
 		msk,
-		tmsk,
-		tunnel_public_key
+		encode(&tpsk),
+		tmsk
 	);
-	let mut ghh = ping_msg("ipv4_hello".to_string(), &bg);    
-	bg.send_data(&mut ghh);
-	bg.close();
-	
-	  
-  }
+	let mut pay_load = ping_msg("ipv4_hello".to_string(), &ping_network);    
+	ping_network.send_data(&mut pay_load);
+	ping_network.close();  
+ }
   
   #[test]
   fn test_serialization() {
-	let rx_ip_address = "127.0.0.3".to_string(); 
-	let rx_udp_port  = "3456".to_string(); 
-	let tx_ip_address = "0.0.0.0".to_string();
-	let tx_udp_port = "0".to_string();
-	let public_key: String;
-	let tunnel_public_key: String;
 	let (psk, msk ) = ed25519::generate_keypair();
 	let (tpsk, tmsk ) = ed25519::generate_keypair();
-	public_key = encode(&psk);
-	let public_kay = public_key.clone();
-	let public_kay_t = public_kay.clone();
-	tunnel_public_key = encode(&tpsk);
-	let pip = tx_ip_address.clone();
-	let pip_udp = tx_udp_port.clone();
-	let mut bg =  PingUpdNetworkProfile::new(
-		rx_ip_address, 
-		rx_udp_port,
-		tx_ip_address, 
-		tx_udp_port, 
-		public_key, 
+	let mut ping_network =  build_network(
+		"127.0.0.3".to_string(),
+		"3456".to_string(),
+		"0.0.0.0".to_string(), 
+		"0".to_string(), 
+		encode(&psk), 
 		msk,
-		tmsk,
-		tunnel_public_key
+		encode(&tpsk),
+		tmsk
 	);
-	let ghh = ping_msg("ipv4_hello".to_string(), &bg); 
-	let mut param = ghh[..].to_vec();
-	let mut strnam = String::from_utf8(param).expect("Found invalid UTF-8");
-	let mut mvec = strnam.split_whitespace().collect::<Vec<&str>>();
+	let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network); 
+	let mut ping_msg_vec = ping_str_buf[..].to_vec();
+	let mut ping_str_payload = String::from_utf8(ping_msg_vec).expect("Found invalid UTF-8");
+	let mut str_vec = ping_str_payload.split_whitespace().collect::<Vec<&str>>();
     println!("Testing Hello Message");
-	assert_eq!("ipv4_hello".to_string(), mvec[0]);
+	assert_eq!("ipv4_hello".to_string(), str_vec[0]);
+
+	let ipaddr_byte = decode(str_vec[2]).unwrap();
+	let ipaddr_str = String::from_utf8(ipaddr_byte).expect("Found invalid UTF-8");
 	
-	let bbbb = decode(mvec[2]).unwrap();
-	let ffoo = String::from_utf8(bbbb).expect("Found invalid UTF-8");
 	println!("Testing IP Address");
-	assert_eq!(pip, ffoo);
+	assert_eq!("127.0.0.3".to_string(), ipaddr_str);
+	
 	println!("Testing Public key");
-	assert_eq!(psk, &decode(mvec[1]).unwrap()[..]);
-	let cccc = decode(mvec[3]).unwrap();
-	let ffuu = String::from_utf8(cccc).expect("Found invalid UTF-8");
+	assert_eq!(psk, &decode(str_vec[1]).unwrap()[..]);
+	let udp_byte = decode(str_vec[3]).unwrap();
+	let udp_str = String::from_utf8(udp_byte).expect("Found invalid UTF-8");
+	
 	println!("Testing UDP Port");
-	assert_eq!(pip_udp, ffuu);	
-	assert_eq!("0", mvec[5]);
-	let nbnb = decode(mvec[4]).unwrap();
-	let xsds = String::from_utf8(nbnb).expect("Found invalid UTF-8");
+	assert_eq!("3456".to_string(), udp_str);	
+	assert_eq!("0", str_vec[5]);
+	
+	let timestamp_byte = decode(str_vec[4]).unwrap();
+	let timestamp_str  = String::from_utf8(timestamp_byte).expect("Found invalid UTF-8");
 	println!("Time this network was created");
-	println!("{}", xsds);
-	bg.close();
+	println!("{}", timestamp_str);
+	ping_network.close();
 	
 
 }
 #[test]
   fn test_neighbor() {
-	let rx_ip_address = "127.0.0.0".to_string(); 
-	let rx_udp_port  = "3456".to_string(); 
-	let tx_ip_address = "0.0.0.0".to_string();
-	let tx_udp_port = "0".to_string();
-	let public_key: String;
-	let tunnel_public_key: String;
 	let (psk, msk ) = ed25519::generate_keypair();
 	let (tpsk, tmsk ) = ed25519::generate_keypair();
-	public_key = encode(&psk);
-	let public_kay = public_key.clone();
-	let public_kay_t = public_kay.clone();
-	tunnel_public_key = encode(&tpsk);
-	let pip = tx_ip_address.clone();
-	let pip_udp = tx_udp_port.clone();
-	let mut bg =  PingUpdNetworkProfile::new(
-		rx_ip_address, 
-		rx_udp_port,
-		tx_ip_address, 
-		tx_udp_port, 
-		public_key, 
+	let mut ping_network =  build_network(
+		"127.0.0.0".to_string(),
+		"3456".to_string(),
+		"0.0.0.0".to_string(), 
+		"0".to_string(), 
+		encode(&psk), 
 		msk,
-		tmsk,
-		tunnel_public_key
+		encode(&tpsk),
+		tmsk
 	);
-	let ghh = ping_msg("ipv4_hello".to_string(), &bg); 
-	let mut param = ghh[..].to_vec();
-	let mut strnam = String::from_utf8(param).expect("Found invalid UTF-8");
-	let mut mvec = strnam.split_whitespace().collect::<Vec<&str>>();
-	let mut bu =  build_neighbor(mvec, 0);
-	bg.close();
+	let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network); 
+	let mut ping_msg_vec = ping_str_buf[..].to_vec();
+	let mut ping_str_payload = String::from_utf8(ping_msg_vec).expect("Found invalid UTF-8");
+	let mut str_vec = ping_str_payload.split_whitespace().collect::<Vec<&str>>();
+	let mut neighbr =  build_neighbor(str_vec, 0);
+	ping_network.close();
 	println!("Testing Neighbor Public key");
-	assert_eq!(psk, &decode(&bu.public_key).unwrap()[..]);
-	
-	
+	assert_eq!(psk, &decode(&neighbr.public_key).unwrap()[..]);	
 }
 
 
+ #[test]
+pub fn test_udp_socket_tx_rx() {
+	let (psk, msk ) = ed25519::generate_keypair();
+	let (tpsk, tmsk ) = ed25519::generate_keypair();
+	let mut ping_network =  build_network(
+		"127.0.0.5".to_string(),
+		"3456".to_string(),
+		"0.0.0.0".to_string(), 
+		"0".to_string(), 
+		encode(&psk), 
+		msk,
+		encode(&tpsk),
+		tmsk
+	);
+
+    let tx_addr = ping_network.tx.local_addr().unwrap();
+    let rx_addr = ping_network.rx.local_addr().unwrap();
+
+    assert!(ping_network.tx.connect(rx_addr).is_ok());
+    assert!(ping_network.rx.connect(tx_addr).is_ok());
+    ping_network.close();
+}
 }
