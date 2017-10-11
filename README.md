@@ -56,3 +56,18 @@ inserted in to a table which is keyed by public_key.
 The seqnum will be used to avoid cheating from pongs. And the table would be 
 checked for nodes that are not atcive, and such nodes would be removed.
 
+```
+To use ::
+use pingnetwork::Multicast_Net;
+use neighbor::Neighbor;
+
+let mut network = Multicast_Net::new("224.0.0.8".to_string(),"41239".to_string(), vec, secret );
+network.start_net();
+vec is vector:
+item number 0 :: encoded public key
+item number 1 :: encoded payment address
+item number 2 :: encoded IP address (Multicast)
+item number 3 :: encoded UDP port number
+
+The IP address in the argument is the one used for receiving with its corresponding port
+```
