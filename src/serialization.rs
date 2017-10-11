@@ -1,195 +1,208 @@
-use base64::{decode, encode};
 use bytes::{BufMut, BytesMut};
+use neighbor::Neighbor;
+use time;
 use edcert::ed25519;
-use std::str;
-//use std::thread;
-use chrono::prelude::*;
-//use pongnetwork::PongUpdNetworkProfile;
-use pingnetwork::PingUpdNetworkProfile;
-use types::{Neighbor, ENDPORT};
+use base64::{decode, encode};
 
+const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
-
-const BUFFER_CAPACITY_MESSAGE: usize = 4096;
-
-///To be filtered out a bit
-
-pub fn ping_msg(header: String, ping: &PingUpdNetworkProfile) -> BytesMut {
-	let utc: DateTime<Utc> = Utc::now();
-	let created_time_utc = format!("{}", utc);
-	let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
-	let str_tmp = format!(
-		"{} {} {} {} {} {}",
-		header,
-		ping.public_key,
-		encode(&ping.end_port.ip_address),
-		encode(&ping.end_port.udp_port),
-		encode(&created_time_utc),
-		ping.seqnum
-	);
-	let sig = ed25519::sign(str_tmp.as_bytes(), &ping.private_key);
-	rslt.put(str_tmp);
-	rslt.put(" ");
-	rslt.put(encode(&sig));
-	rslt
+pub fn decode_key(mstr: String) -> Option<Vec<u8>> {
+    match decode(&mstr) {
+        Ok(v) => {
+            return Some(v);
+        }
+        Err(e) => {
+            println!("Failed to decode  {}", e);
+            return None;
+        }
+    };
 }
 
-///To be completed
-fn m_decode(mstr: String) -> String {
-	let lstr;
-	lstr = match decode(&mstr) {
-		Ok(v) => String::from_utf8(v).expect("Found invalid UTF-8"),
-		Err(e) => panic!("Failed to decode  {}", mstr),
-	};
-	lstr
+pub fn payload(
+    profile: &Vec<&String>,
+    seqnum: i32,
+    secret: &[u8; 64],
+    header_msg: String,
+) -> BytesMut {
+    let sig;
+    let tme = time::get_time().sec + 70;
+    let mut rslt = BytesMut::with_capacity(BUFFER_CAPACITY_MESSAGE);
+    let msg = format!(
+        "{} {} {} {} {} {} {}",
+        header_msg,
+        profile[0],
+        profile[1],
+        profile[2],
+        profile[3],
+        tme,
+        seqnum
+    );
+    sig = ed25519::sign(msg.as_bytes(), secret);
+    rslt.put(msg);
+    rslt.put(" ");
+    rslt.put(encode(&sig));
+    rslt
 }
 
-
-pub fn build_neighbor(vec_fields: Vec<&str>, ttnum: usize) -> Neighbor {
-	let udp_port = m_decode(vec_fields[vec_fields.len() - 4].to_string());
-	let ip_address = m_decode(vec_fields[2].to_string());
-	let end_port = ENDPORT {
-		udp_port: udp_port,
-		ip_address: ip_address,
-	};
-	Neighbor {
-		public_key: vec_fields[1].to_string(),
-		payment_address: vec_fields[1].to_string(), //should have the right address
-		seqnum: vec_fields[vec_fields.len() - 2].parse::<usize>().unwrap(),
-		active: ttnum,
-		end_port: end_port,
-	}
+pub fn on_pong(packet: BytesMut, active: i32) -> Option<Neighbor> {
+    let vec_str: Vec<String>;
+    let payload;
+    let pub_key;
+    let sig;
+    let tm;
+    let vec: Vec<&str>;
+    if check_size(&packet) {
+        if match_header(&packet) {
+            vec_str = bytes_vec(&packet);
+            payload = extract_payload(&vec_str);
+            match vec_str[vec_str.len() - 3].parse::<i64>() {
+                Ok(v) => {
+                    tm = time::get_time().sec;
+                    if !time_within(v, tm) {
+                        return None;
+                    }
+                }
+                Err(e) => {
+                    println!("Poor protocol: failed to extract {:?}", e);
+                    return None;
+                }
+            };
+            pub_key = match decode_key(vec_str[1].clone()) {
+                Some(v) => v,
+                _ => {
+                    return None;
+                }
+            };
+            sig = match decode_key(vec_str[vec_str.len() - 1].clone()) {
+                Some(v) => v,
+                _ => {
+                    return None;
+                }
+            };
+            if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
+                vec = vec_str.iter().map(|s| &**s).collect();
+                match Neighbor::new(vec, active) {
+                    Some(ngb) => {
+                        return Some(ngb);
+                    }
+                    _ => {
+                        return None;
+                    }
+                };
+            }
+        }
+    }
+    return None;
 }
 
+pub fn match_header(packet: &BytesMut) -> bool {
+    match String::from_utf8(packet[0..18].to_vec()) {
+        Ok(v) => {
+            if "ipv4_hello_confirm" == v {
+                return true;
+            } else {
+                return false;
+            }
+        }
+        Err(e) => {
+            println!("Found invalid UTF-8 {:?}", e);
+            return false;
+        }
+    };
+}
+
+pub fn check_size(packet: &BytesMut) -> bool {
+    if packet.len() > 200 { true } else { false }
+}
+
+pub fn time_within(sent_tm: i64, now_tm: i64) -> bool {
+    if now_tm <= sent_tm { true } else { false }
+}
+
+fn bytes_vec(packet: &BytesMut) -> Vec<String> {
+    let vec_str: Vec<String>;
+    let ping_msg_vec = packet[..].to_vec();
+    let str_buf = match String::from_utf8(ping_msg_vec) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("Found invalid UTF-8 {:?}", e);
+            "".to_string()
+        }
+    };
+    vec_str = str_buf.split_whitespace().map(|s| s.to_string()).collect();
+    vec_str
+}
+
+fn extract_payload(vec: &Vec<String>) -> String {
+    vec[0..7].join(" ")
+}
 
 #[cfg(test)]
 mod test {
-	use std::str;
-	use std::vec::Vec;
-	use chrono::prelude::*;
-	use edcert::ed25519;
-	use base64::{decode, encode};
-	use pingnetwork::PingUpdNetworkProfile;
-	use serialization::{build_neighbor, ping_msg};
 
+    use time;
+    use serialization;
+    use edcert::ed25519;
+    use base64::{decode, encode};
+    use bytes::{BufMut, BytesMut};
 
+    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String, [u8; 64]) {
+        let (psk, msk) = ed25519::generate_keypair();
+        return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
 
-	fn build_network(
-		rx_ip_address: String,
-		rx_udp_port: String,
-		tx_ip_address: String,
-		tx_udp_port: String,
-		psk: String,
-		msk: [u8; 64],
-	) -> PingUpdNetworkProfile {
-		let pg_net = PingUpdNetworkProfile::new(
-			tx_ip_address,
-			tx_udp_port,
-			rx_ip_address,
-			rx_udp_port,
-			psk,
-			msk,
-		);
-		pg_net
-	}
+    }
 
+    fn pong_host() -> (BytesMut, String, [u8; 64]) {
+        let (ip_addr, udp_port, pub_key, secret) =
+            encodeVal("41235".to_string(), "224.0.0.3".to_string());
+        let cloned_pub_key = pub_key.clone();
+        let mut vec = Vec::new();
+        vec.push(&pub_key);
+        vec.push(&cloned_pub_key);
+        vec.push(&ip_addr);
+        vec.push(&udp_port);
+        let bytes = serialization::payload(&vec, 45, &secret, "ipv4_hello_confirm".to_string());
+        return (bytes, pub_key.clone(), secret);
+    }
 
-	#[test]
-	fn test_send_data() {
-		let (psk, msk) = ed25519::generate_keypair();
-		let ping_network = build_network(
-			"127.0.0.1".to_string(),
-			"3456".to_string(),
-			"0.0.0.0".to_string(),
-			"0".to_string(),
-			encode(&psk),
-			msk,
-		);
-		let mut pay_load = ping_msg("ipv4_hello".to_string(), &ping_network);
-		ping_network.send_data(&mut pay_load);
-		ping_network.close();
-	}
+    fn not_time() -> Option<i64> {
+        let n = 40;
+        if n > 20 {
+            return Some(n);
+        } else {
+            return None;
 
-	#[test]
-	fn test_serialization() {
-		let (psk, msk) = ed25519::generate_keypair();
-		let ping_network = build_network(
-			"127.0.0.3".to_string(),
-			"3456".to_string(),
-			"0.0.0.0".to_string(),
-			"0".to_string(),
-			encode(&psk),
-			msk,
-		);
-		let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network);
-		let ping_msg_vec = ping_str_buf[..].to_vec();
-		let ping_str_payload = String::from_utf8(ping_msg_vec).expect("Found invalid UTF-8");
-		let str_vec = ping_str_payload.split_whitespace().collect::<Vec<&str>>();
-		println!("Testing Hello Message");
-		assert_eq!("ipv4_hello".to_string(), str_vec[0]);
+        }
 
-		let ipaddr_byte = decode(str_vec[2]).unwrap();
-		let ipaddr_str = String::from_utf8(ipaddr_byte).expect("Found invalid UTF-8");
+    }
+    fn time_within(sent_tm: i64, now_tm: i64) -> bool {
+        if now_tm <= sent_tm { true } else { false }
+    }
 
-		println!("Testing IP Address");
-		assert_eq!("127.0.0.3".to_string(), ipaddr_str);
+    #[test]
+    fn serialization_test_header_msg() {
+        let (mbytes, _, _) = pong_host();
+        let header_str = String::from_utf8(mbytes[0..18].to_vec()).expect("Found invalid UTF-8");
+        assert_eq!(header_str, "ipv4_hello_confirm");
+    }
 
-		println!("Testing Public key");
-		assert_eq!(psk, &decode(str_vec[1]).unwrap()[..]);
-		let udp_byte = decode(str_vec[3]).unwrap();
-		let udp_str = String::from_utf8(udp_byte).expect("Found invalid UTF-8");
+    #[test]
+    fn serialization_test_time() {
+        let (mbytes, _, _) = pong_host();
+        let vec = serialization::bytes_vec(&mbytes);
+        let packet_tm = vec[vec.len() - 3].parse::<i64>().unwrap();
+        let now_tm = time::get_time().sec as i64;
+        assert_eq!(time_within(packet_tm, now_tm), true);
+    }
 
-		println!("Testing UDP Port");
-		assert_eq!("3456".to_string(), udp_str);
-		assert_eq!("0", str_vec[5]);
+    #[test]
+    fn serialization_test_packet_header() {
+        let (mbytes, _, _) = pong_host();
+        serialization::on_pong(mbytes.clone(), 8);
 
-		let timestamp_byte = decode(str_vec[4]).unwrap();
-		let timestamp_str = String::from_utf8(timestamp_byte).expect("Found invalid UTF-8");
-		println!("Time this network was created");
-		println!("{}", timestamp_str);
-		ping_network.close();
-	}
-
-
-	#[test]
-	fn test_neighbor() {
-		let (psk, msk) = ed25519::generate_keypair();
-		let ping_network = build_network(
-			"127.0.0.0".to_string(),
-			"3456".to_string(),
-			"0.0.0.0".to_string(),
-			"0".to_string(),
-			encode(&psk),
-			msk,
-		);
-		let ping_str_buf = ping_msg("ipv4_hello".to_string(), &ping_network);
-		let ping_msg_vec = ping_str_buf[..].to_vec();
-		let ping_str_payload = String::from_utf8(ping_msg_vec).expect("Found invalid UTF-8");
-		let str_vec = ping_str_payload.split_whitespace().collect::<Vec<&str>>();
-		let neighbr = build_neighbor(str_vec, 0);
-		ping_network.close();
-		println!("Testing Neighbor Public key");
-		assert_eq!(psk, &decode(&neighbr.public_key).unwrap()[..]);
-	}
-
-
-	#[test]
-	pub fn test_udp_socket_tx_rx() {
-		let (psk, msk) = ed25519::generate_keypair();
-		let ping_network = build_network(
-			"127.0.0.5".to_string(),
-			"3456".to_string(),
-			"0.0.0.0".to_string(),
-			"0".to_string(),
-			encode(&psk),
-			msk,
-		);
-
-		let tx_addr = ping_network.tx.local_addr().unwrap();
-		let rx_addr = ping_network.rx.local_addr().unwrap();
-
-		assert!(ping_network.tx.connect(rx_addr).is_ok());
-		assert!(ping_network.rx.connect(tx_addr).is_ok());
-		ping_network.close();
-	}
+        match serialization::on_pong(mbytes, 8) {
+            Some(ngb) => assert_eq!(ngb.get_endpoint().ip_address, "224.0.0.3"),
+            _ => assert_eq!(false, true),
+        };
+    }
 }

@@ -1,40 +1,193 @@
-//use bytes::{BytesMut, Buf, Bytes};
-
-use std::collections::HashMap;
-use types::Neighbor;
+use types::ENDPOINT;
+use base64::decode;
 
 
-pub struct Neighbors {
-	members: HashMap<String, Neighbor>,
-	host_status_num: usize,
+pub fn decode_str(mstr: String) -> Option<String> {
+    match decode(&mstr) {
+        Ok(v) => {
+            match String::from_utf8(v) {
+                Ok(v) => {
+                    return Some(v);
+                }
+                Err(e) => {
+                    println!("Failed utf8 conversion  {}", e);
+                    return None;
+                }
+            };
+        }
+        Err(e) => {
+            println!("Failed to decode  {}", e);
+            return None;
+        }
+    };
 }
 
-impl Neighbors {
-	pub fn new() -> Neighbors {
-		let members: HashMap<String, Neighbor> = HashMap::new();
+pub struct Neighbor {
+    active: i32,
+    pub_key: String,
+    seqnum: i32,
+    payment_address: String,
+    end_port: ENDPOINT,
+}
 
-		Neighbors {
-			members,
-			host_status_num: 0,
-		}
-	}
+impl Neighbor {
+    pub fn new(vec_fields: Vec<&str>, ttnum: i32) -> Option<Neighbor> {
+        let ip_address;
+        let end_port: ENDPOINT;
+        let num;
+        let udp_port;
+        let negh: Neighbor;
+        udp_port = match decode_str(vec_fields[4].to_string()) {
+            Some(v) => v,
+            _ => return None,
+        };
+        ip_address = match decode_str(vec_fields[3].to_string()) {
+            Some(v) => v,
+            _ => return None,
+        };
+        end_port = ENDPOINT {
+            udp_port: udp_port,
+            ip_address: ip_address,
+        };
+        num = match vec_fields[vec_fields.len() - 2].parse::<i32>() {
+            Ok(v) => v,
+            Err(e) => {
+                println!("Failed to parse num {:?}", e);
+                return None;
+            }
+        };
+        negh = Neighbor {
+            pub_key: vec_fields[1].to_string(),
+            payment_address: vec_fields[2].to_string(), //should have the right address
+            seqnum: num,
+            active: ttnum,
+            end_port: end_port,
+        };
 
-	pub fn add_to_table(&mut self, member: Neighbor) {
-		self.members.insert(member.public_key.clone(), member);
-	}
+        return Some(negh);
+    }
 
-	pub fn remove_from_table(&mut self, public_key: String) {
-		self.members.remove(&public_key);
-	}
-	///https://stackoverflow.com/questions/28909583/removing-entries-from-a-hashmap-based-on-value
-	pub fn clean_table(&mut self) {
-		let empties: Vec<_> = self.members
-			.iter()
-			.filter(|&(_, ref v)| v.active != self.host_status_num)
-			.map(|(k, _)| k.clone())
-			.collect();
-		for empty in empties {
-			self.members.remove(&empty);
-		}
-	}
+    pub fn get_pub_key(&self) -> &String {
+        &self.pub_key
+    }
+
+    pub fn get_payment_address(&self) -> &String {
+        &self.payment_address
+    }
+
+    pub fn get_endpoint(&self) -> &ENDPOINT {
+        &self.end_port
+    }
+
+    pub fn get_seqnum(&self) -> i32 {
+        self.seqnum
+    }
+
+    pub fn get_active(&self) -> i32 {
+        self.active
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use types::ENDPOINT;
+    use base64::{decode, encode};
+    use neighbor::Neighbor;
+    use edcert::ed25519;
+
+
+    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String) {
+        let (psk, msk) = ed25519::generate_keypair();
+        return (encode(&ip_address), encode(&udp_port), encode(&psk));
+    }
+
+    fn given_neighbor() -> Option<(Neighbor, String)> {
+        let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
+        let testnum = 45;
+        let cloned_pub_key = pub_key.clone();
+        let not_applicable = "N/A";
+        let sequm = "3";
+        let mut vec = Vec::new();
+        vec.push(not_applicable.clone());
+        vec.push(&pub_key);
+        vec.push(&pub_key);
+        vec.push(&ip_addr);
+        vec.push(&udp_port);
+        vec.push(sequm);
+        vec.push(not_applicable.clone());
+        let ngb = match Neighbor::new(vec, testnum) {
+            Some(v) => v,
+            _ => {
+                println!("Failed protocol");
+                return None;
+            }
+        };
+        return Some((ngb, cloned_pub_key));
+    }
+
+    #[test]
+    fn neighbor_test_pub_key() {
+        match given_neighbor() {
+            Some((n, k)) => assert_eq!(n.get_pub_key(), &k),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
+
+    #[test]
+    fn neighbor_test_payment_address() {
+        match given_neighbor() {
+            Some((n, k)) => assert_eq!(n.get_payment_address(), &k),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
+
+    #[test]
+    fn neighbor_test_end_port_udp_port() {
+        match given_neighbor() {
+            Some((n, k)) => assert_eq!(n.get_endpoint().udp_port, "41235"),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
+
+    #[test]
+    fn neighbor_test_end_port_ip_address() {
+        match given_neighbor() {
+            Some((n, k)) => assert_eq!(n.get_endpoint().ip_address, "224.0.0.3"),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
+
+    #[test]
+    fn neighbor_test_seqnum() {
+        match given_neighbor() {
+            Some((n, _)) => assert_eq!(n.get_seqnum(), 3),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
+
+    #[test]
+    fn neighbor_test_active_num() {
+        match given_neighbor() {
+            Some((n, _)) => assert_eq!(n.get_active(), 45),
+            _ => {
+                println!("Failed Neighbor asserting false");
+                assert_eq!(false, false);
+            }
+        };
+    }
 }

@@ -1,143 +1,204 @@
-
 use bytes::{BytesMut, Buf, BufMut};
-//use std::time::Duration;
-//use std::thread;
-use std::net::UdpSocket;
-use base64::{encode, decode};
-use edcert::ed25519;
-use mio::{PollOpt, Token};
-use neighbor::{Neighbors};
+use mio::{Events, Poll, PollOpt, Ready, Token};
+use std::net::SocketAddr;
+use mio::udp::*;
 use serialization;
-use types::{ENDPORT, Neighbor};
+use time;
+use neighbors::Neighbors;
+use neighbor::decode_str;
 
 
+const BUFFER_CAPACITY: usize = 800;
+const LISTENER: Token = Token(0);
+const SENDER: Token = Token(1);
 
-const BUFFER_CAPACITY:usize = 4096;
 
-fn create_socket(
-	ipadr: String, 
-	port: String
-) -> UdpSocket {
-	let separation = ":".to_string();
-	let ip_and_port = format!(
-		"{}{}{}", 
-		ipadr, 
-		separation, 
-		port
-	);
-	let socket = match UdpSocket::bind(ip_and_port) {
-		Ok(s) => s,
-		Err(e) => panic!("Failed to establish bind socket {}", e)
-	};
-	socket
+pub fn UDPsocket(ipadr: &String, port: &String) -> (UdpSocket, SocketAddr) {
+    let ip_and_port = format!("{}:{}", ipadr.clone(), port);
+    let saddr: SocketAddr = ip_and_port.parse().unwrap();
+    let socket = match UdpSocket::bind(&saddr) {
+        Ok(s) => s,
+        Err(e) => panic!("Failed to establish bind socket {}", e),
+    };
+    (socket, saddr)
 }
 
-pub struct PingUpdNetworkProfile {
-	pub tx: UdpSocket,
-	pub rx: UdpSocket,
-	pub buf: BytesMut,
-	pub public_key: String,
-	pub private_key: [u8; 64],
-	pub seqnum: usize,
-	pub status_num: usize,
-	pub end_port: ENDPORT,
-	pub direct_connected_nodes: Neighbors,
+pub fn dcod(mstr: String) -> String {
+    let dstr = match decode_str(mstr.clone()) {
+        Some(v) => v,
+        _ => {
+            panic!("Failed to decode {}", mstr);
+        }
+    };
+    dstr
 }
 
-impl PingUpdNetworkProfile {
-	pub fn new(
-		rx_ip_address: String, 
-		rx_udp_port: String,
-		tx_ip_address: String, 
-		tx_udp_port: String, 
-		public_key: String, 
-		private_key: [u8; 64]
-) -> PingUpdNetworkProfile {
-		let mbuf = BytesMut::with_capacity(BUFFER_CAPACITY);
-		let neighbors = Neighbors::new();
-		let cloned_tx_ipadr = tx_ip_address.clone();
-		let cloned_tx_udp_port  = tx_udp_port.clone();
-		let end_port = ENDPORT {
-			ip_address: tx_ip_address,
-			udp_port: tx_udp_port,
-		};
-		PingUpdNetworkProfile {
-			tx: create_socket(cloned_tx_ipadr, cloned_tx_udp_port),
-			rx: create_socket(rx_ip_address, rx_udp_port),
-			buf: mbuf,
-			end_port: end_port,
-			public_key: public_key,
-			private_key: private_key,
-			direct_connected_nodes: neighbors,
-			status_num: 0,
-			seqnum: 0,
-		}
-	}
-	
-///To add either threadpool or Eventloop or Poll. 
-	fn read_from(&mut self) {
-		let sig;
-		let pub_key;
-		let joined;
-		match self.rx.recv_from(&mut self.buf[..]) {
-			Ok((nbytes, saddr)) => {},
-			Err(e) => panic!("recv_from error: {}", e),
-		};
-		let msg_buf = self.buf[..].to_vec();
-		let str_buf = String::from_utf8(msg_buf).expect("Found invalid UTF-8");
-		let mvec = str_buf.split_whitespace().collect::<Vec<&str>>();
-		sig = match decode(&mvec[mvec.len() - 1]) {
-			Ok(v) => v,
-			Err(e) => panic!("Failed to decode signature, {}", e),
-		};
-		pub_key = match decode(&mvec[mvec.len() - 1]) {
-			Ok(v) => v,
-			Err(e) => panic!("Failed to decode public key, {}", e),
-		};
-		joined = mvec[1..mvec.len() - 1].join(" ");
-		match ed25519::verify(joined.as_bytes(), &sig, &pub_key) {
-			true => {
-				match mvec[0] {
-					"ipv4_hello_confirm" => {
-						self.direct_connected_nodes.add_to_table(serialization::build_neighbor(mvec, 0));
-					},
-					_ => { panic!("Failed to interpret message"); }
-				};
-			},
-			false => {return;},
-		};
-	}
-	
-	pub fn send_data(&self,  buf: &mut BytesMut){
-		let addr = self.tx.local_addr().unwrap();
-		match self.tx.set_multicast_ttl_v4(1) {
-			Ok(n) => n,
-			Err(e) => panic!("Failed to set multicast ttl {}", e),
-		};
-		match self.tx.send_to(&mut buf[..], &addr){
-			Ok(n) => {},
-			Err(e) => panic!("Failed to send data through the network {}", e),
-		};
-		buf.clear();
-	}
-	
-	pub fn close(self){
-		drop(self.tx);
-		drop(self.rx);
-	}
+pub struct Multicast_Net {
+    tx: UdpSocket,
+    rx: UdpSocket,
+    secret: [u8; 64],
+    shutdown: bool,
+    packet_sent: bool,
+    buf: BytesMut,
+    st_time: i64,
+    ipaddr: SocketAddr,
+    pub nodes: Neighbors,
 }
 
+impl Multicast_Net {
+    pub fn new(
+        rx_ip: String,
+        rx_udp: String,
+        pro_vec: Vec<&String>,
+        secret: [u8; 64],
+    ) -> Multicast_Net {
+        let (rx_udpsock, _) = UDPsocket(&rx_ip, &rx_udp);
+        let (tx_udpsock, ip_addr) = UDPsocket(&dcod(pro_vec[2].clone()), &dcod(pro_vec[3].clone()));
+        match tx_udpsock.set_multicast_ttl_v4(1) {
+            Ok(n) => n,
+            Err(e) => panic!("Failed to set multicast ttl {}", e),
+        };
+
+        Multicast_Net {
+            tx: tx_udpsock,
+            rx: rx_udpsock,
+            secret: secret,
+            ipaddr: ip_addr,
+            buf: serialization::payload(&pro_vec, 0, &secret, "ipv4_hello".to_string()),
+            shutdown: false,
+            packet_sent: false,
+            st_time: time::get_time().sec,
+            nodes: Neighbors::new(),
+        }
+    }
+
+    pub fn parse_packet(&mut self, buf: BytesMut) {
+        match serialization::on_pong(buf, self.nodes.get_host_status_num()) {
+            Some(ngb) => {
+                self.nodes.insert_neighbor(ngb);
+            }
+            _ => {}
+        };
+    }
+
+    pub fn read_udpsocket(&mut self, _: &mut Poll, token: Token, _: Ready) {
+        let mut current_time = 0 as i64;
+        match token {
+            LISTENER => {
+                let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
+                match self.rx.recv_from(&mut buf[..]) {
+                    Ok(Some((len, address))) => {
+                        current_time = time::get_time().sec;
+                        self.parse_packet(buf);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Error reading UDP packet: {:?}", e);
+                    }
+                };
+                if current_time > self.st_time {
+                    self.shutdown = true;
+                }
+            }
+            _ => (),
+        }
+    }
+
+    pub fn send_packet(&mut self, _: &mut Poll, token: Token, _: Ready) {
+        if self.packet_sent {
+            return;
+        }
+        match token {
+            SENDER => {
+                match self.tx.send_to(&self.buf[..], &self.ipaddr) {
+                    Ok(Some(size)) if size == self.buf.len() => {
+                        self.packet_sent = true;
+                        self.st_time = time::get_time().sec + 120;
+                    }
+                    Ok(Some(_)) => {
+                        println!("UDP sent incomplete payload");
+                    }
+                    Ok(None) => {
+                        println!("UDP sent Nothing");;
+                    }
+                    Err(e) => {
+                        println!(
+                            "Error send UDP:: {:?} and the sock_addr is {:?}",
+                            e,
+                            &self.ipaddr
+                        );
+                    }
+                };
+            }
+            _ => (),
+        }
+    }
+
+    pub fn start_net(&mut self) {
+        let mut poll = Poll::new().unwrap();
+
+        poll.register(&self.tx, SENDER, Ready::writable(), PollOpt::edge())
+            .unwrap();
+
+        poll.register(&self.rx, LISTENER, Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        let mut events = Events::with_capacity(1024);
+
+        while !self.shutdown {
+            poll.poll(&mut events, None).unwrap();
+            for event in &events {
+                if event.readiness().is_readable() {
+                    self.read_udpsocket(&mut poll, event.token(), event.readiness());
+                }
+                if event.readiness().is_writable() {
+                    self.send_packet(&mut poll, event.token(), event.readiness());
+                }
+            }
+        }
+    }
+
+    pub fn close(self) {
+        drop(self.tx);
+        drop(self.rx);
+    }
+}
 
 
 #[cfg(test)]
 mod test {
-//use network::create_socket;
-//use network::UpdNetworkProfile;
+    use time;
+    use serialization;
+    use edcert::ed25519;
+    use base64::{decode, encode};
+    use bytes::{BufMut, BytesMut};
+    use pingnetwork::Multicast_Net;
 
 
- #[test]
-pub fn test_udp_socket_send_recv() {
+    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String, [u8; 64]) {
+        let (psk, msk) = ed25519::generate_keypair();
+        return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
 
-}
+    }
+
+    #[test]
+    fn test_network_returned() {
+        let (ip_addr, udp_port, pub_key, secret) =
+            encodeVal("41235".to_string(), "224.0.0.3".to_string());
+        let cloned_pub_key = pub_key.clone();
+        let mut vec = Vec::new();
+        vec.push(&pub_key);
+        vec.push(&cloned_pub_key);
+        vec.push(&ip_addr);
+        vec.push(&udp_port);
+        let bytes =
+            serialization::payload(&vec.clone(), 45, &secret, "ipv4_hello_confirm".to_string());
+        let mut network =
+            Multicast_Net::new("224.0.0.8".to_string(), "41239".to_string(), vec, secret);
+        network.parse_packet(bytes);
+        assert_eq!(1, network.nodes.get_neighbors().len());
+    }
+
+
 
 }
