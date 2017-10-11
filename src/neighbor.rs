@@ -37,6 +37,14 @@ impl Neighbor {
         let num;
         let udp_port;
         let negh: Neighbor;
+        //So this could be cleaner, you're converting it to a string
+        //to get around lifetime issues for the &str which is a reference
+        //that must outlive it's caller, vs a String which can change ownership
+        //more easily. So some reading on &str vs String in rust, it's confusing
+        //to fix the problem you have now you should manually specifify the lifetime
+        //of the reference in your function Look here https://github.com/althea-mesh/babel_monitor/blob/master/src/lib.rs#L67
+        //you see how I have a lifetime denotation on that function that lets me pass around &str?
+        //(jkilpatr)
         udp_port = match decode_str(vec_fields[4].to_string()) {
             Some(v) => v,
             _ => return None,
@@ -57,7 +65,7 @@ impl Neighbor {
             }
         };
         negh = Neighbor {
-            pub_key: vec_fields[1].to_string(),
+            pub_key: vec_fields[1].to_string(), // < see this works, no decode_str or Some() required (jkilpatr)
             payment_address: vec_fields[2].to_string(), //should have the right address
             seqnum: num,
             active: ttnum,
@@ -98,19 +106,19 @@ mod test {
 
     fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String) {
         let (psk, msk) = ed25519::generate_keypair();
-        return (encode(&ip_address), encode(&udp_port), encode(&psk));
+        return (encode(&ip_address), encode(&udp_port), encode(&psk));//why exactly are we doing base64 encoding? I'm not sure I can think of a good reason (jkilpatr)
     }
 
     fn given_neighbor() -> Option<(Neighbor, String)> {
         let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
         let testnum = 45;
         let cloned_pub_key = pub_key.clone();
-        let not_applicable = "N/A";
+        let not_applicable = "N/A"; //so this is pushed last and doesn't seem to be actually used? (jkilpatr)
         let sequm = "3";
         let mut vec = Vec::new();
         vec.push(not_applicable.clone());
         vec.push(&pub_key);
-        vec.push(&pub_key);
+        vec.push(&pub_key);//what do we need two pubkeys for? (jkilpatr)
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
@@ -131,7 +139,7 @@ mod test {
             Some((n, k)) => assert_eq!(n.get_pub_key(), &k),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert_eq!(false, false);//just assert!(false) this will always be true, which is bad since you want this test to fail (jkilpatr)
             }
         };
     }
