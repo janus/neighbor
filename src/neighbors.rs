@@ -79,7 +79,7 @@ mod test {
         let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
         let mut testnum = 45;
         let cloned_pub_key = pub_key.clone();
-        let not_applicable = "N/A";
+        let not_applicable = "N/A"; //same comments as the other file (jkilpatr)
         let sequm = "3";
         let mut vec = Vec::new();
         vec.push(not_applicable.clone());

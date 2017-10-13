@@ -23,7 +23,7 @@ pub fn UDPsocket(ipadr: &String, port: &String) -> (UdpSocket, SocketAddr) {
     (socket, saddr)
 }
 
-pub fn dcod(mstr: String) -> String {
+pub fn dcod(mstr: String) -> String { //why not just call the decode string function instead of wrapping it again in this file? (jkilpatr)
     let dstr = match decode_str(mstr.clone()) {
         Some(v) => v,
         _ => {
@@ -54,7 +54,7 @@ impl Multicast_Net {
     ) -> Multicast_Net {
         let (rx_udpsock, _) = UDPsocket(&rx_ip, &rx_udp);
         let (tx_udpsock, ip_addr) = UDPsocket(&dcod(pro_vec[2].clone()), &dcod(pro_vec[3].clone()));
-        match tx_udpsock.set_multicast_ttl_v4(1) {
+        match tx_udpsock.set_multicast_ttl_v4(1) { //what if we use ipv6? (jkilpatr)
             Ok(n) => n,
             Err(e) => panic!("Failed to set multicast ttl {}", e),
         };

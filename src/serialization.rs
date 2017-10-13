@@ -6,8 +6,8 @@ use base64::{decode, encode};
 
 const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
-pub fn decode_key(mstr: String) -> Option<Vec<u8>> {
-    match decode(&mstr) {
+pub fn decode_key(mstr: String) -> Option<Vec<u8>> { //this could also use the decode_str function I'm pretty sure 
+    match decode(&mstr) {                            //String and Vec u8 are equal? Or very close (jkilpatr)
         Ok(v) => {
             return Some(v);
         }
@@ -63,7 +63,7 @@ pub fn on_pong(packet: BytesMut, active: i32) -> Option<Neighbor> {
                     }
                 }
                 Err(e) => {
-                    println!("Poor protocol: failed to extract {:?}", e);
+                    println!("Poor protocol: failed to extract {:?}", e);// Bad packet is a better error message (jkilpatr)
                     return None;
                 }
             };
