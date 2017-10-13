@@ -1,13 +1,14 @@
 use bytes::{BufMut, BytesMut};
 use neighbor::Neighbor;
 use time;
+use std::str;
 use edcert::ed25519;
 use base64::{decode, encode};
 
 const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
-pub fn decode_key(mstr: String) -> Option<Vec<u8>> {
-    match decode(&mstr) {
+pub fn decode_key(mstr: &str) -> Option<Vec<u8>> {
+    match decode(mstr) {
         Ok(v) => {
             return Some(v);
         }
@@ -19,10 +20,10 @@ pub fn decode_key(mstr: String) -> Option<Vec<u8>> {
 }
 
 pub fn payload(
-    profile: &Vec<&String>,
+    profile: &Vec<&str>,
     seqnum: i32,
     secret: &[u8; 64],
-    header_msg: String,
+    header_msg: &str,
 ) -> BytesMut {
     let sig;
     let tme = time::get_time().sec + 70;
@@ -45,65 +46,50 @@ pub fn payload(
 }
 
 pub fn on_pong(packet: BytesMut, active: i32) -> Option<Neighbor> {
-    let vec_str: Vec<String>;
+    let vec_str: Vec<&str>;
     let payload;
     let pub_key;
     let sig;
     let tm;
-    let vec: Vec<&str>;
-    if check_size(&packet) {
-        if match_header(&packet) {
-            vec_str = bytes_vec(&packet);
-            payload = extract_payload(&vec_str);
-            match vec_str[vec_str.len() - 3].parse::<i64>() {
-                Ok(v) => {
-                    tm = time::get_time().sec;
-                    if !time_within(v, tm) {
-                        return None;
-                    }
-                }
-                Err(e) => {
-                    println!("Poor protocol: failed to extract {:?}", e);
+    if check_size(&packet) && match_header(&packet) {
+        vec_str = bytes_vec(&packet);
+        payload = extract_payload(&vec_str);
+        match vec_str[vec_str.len() - 3].parse::<i64>() {
+            Ok(v) => {
+                tm = time::get_time().sec;
+                if !time_within(v, tm) {
                     return None;
                 }
-            };
-            pub_key = match decode_key(vec_str[1].clone()) {
-                Some(v) => v,
-                _ => {
-                    return None;
-                }
-            };
-            sig = match decode_key(vec_str[vec_str.len() - 1].clone()) {
-                Some(v) => v,
-                _ => {
-                    return None;
-                }
-            };
-            if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-                vec = vec_str.iter().map(|s| &**s).collect();
-                match Neighbor::new(vec, active) {
-                    Some(ngb) => {
-                        return Some(ngb);
-                    }
-                    _ => {
-                        return None;
-                    }
-                };
+            },
+            Err(e) => {
+                println!("Wrong protocol: failed to extract {:?}", e);
+                return None;
             }
+        };
+        pub_key = match decode_key(&vec_str[1]) {
+            Some(v) => v,
+            _ => { return None; }
+        };
+        sig = match decode_key(&vec_str[vec_str.len() - 1]) {
+            Some(v) => v,
+            _ => { return None; }
+        };
+        if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
+
+            match Neighbor::new(vec_str, active) {
+                Some(ngb) => { return Some(ngb);}
+                _ => { return None; }
+            };
         }
     }
     return None;
 }
 
 pub fn match_header(packet: &BytesMut) -> bool {
-    match String::from_utf8(packet[0..18].to_vec()) {
+    match String::from_utf8(packet[0..13].to_vec()) {
         Ok(v) => {
-            if "ipv4_hello_confirm" == v {
-                return true;
-            } else {
-                return false;
-            }
-        }
+            return  "hello_confirm" == v;
+        },
         Err(e) => {
             println!("Found invalid UTF-8 {:?}", e);
             return false;
@@ -112,28 +98,25 @@ pub fn match_header(packet: &BytesMut) -> bool {
 }
 
 pub fn check_size(packet: &BytesMut) -> bool {
-    if packet.len() > 200 { true } else { false }
+    packet.len() > 200
 }
 
 pub fn time_within(sent_tm: i64, now_tm: i64) -> bool {
-    if now_tm <= sent_tm { true } else { false }
+    now_tm <= sent_tm
 }
 
-fn bytes_vec(packet: &BytesMut) -> Vec<String> {
-    let vec_str: Vec<String>;
-    let ping_msg_vec = packet[..].to_vec();
-    let str_buf = match String::from_utf8(ping_msg_vec) {
+fn bytes_vec(packet: &BytesMut) -> Vec<&str> {
+    let str_buf = match str::from_utf8(&packet[..]) {
         Ok(v) => v,
         Err(e) => {
             println!("Found invalid UTF-8 {:?}", e);
-            "".to_string()
+            ""
         }
     };
-    vec_str = str_buf.split_whitespace().map(|s| s.to_string()).collect();
-    vec_str
+    str_buf.split_whitespace().collect()
 }
 
-fn extract_payload(vec: &Vec<String>) -> String {
+fn extract_payload(vec: &Vec<&str>) -> String {
     vec[0..7].join(" ")
 }
 
@@ -146,7 +129,7 @@ mod test {
     use base64::{decode, encode};
     use bytes::{BufMut, BytesMut};
 
-    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String, [u8; 64]) {
+    fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String, [u8; 64]) {
         let (psk, msk) = ed25519::generate_keypair();
         return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
 
@@ -154,15 +137,15 @@ mod test {
 
     fn pong_host() -> (BytesMut, String, [u8; 64]) {
         let (ip_addr, udp_port, pub_key, secret) =
-            encodeVal("41235".to_string(), "224.0.0.3".to_string());
-        let cloned_pub_key = pub_key.clone();
-        let mut vec = Vec::new();
+            encodeVal("41235", "224.0.0.3");
+        let mut vec: Vec<&str> = Vec::new();
+        let pb_key = pub_key.clone();
         vec.push(&pub_key);
-        vec.push(&cloned_pub_key);
+        vec.push(&pub_key); // Used as payment address
         vec.push(&ip_addr);
         vec.push(&udp_port);
-        let bytes = serialization::payload(&vec, 45, &secret, "ipv4_hello_confirm".to_string());
-        return (bytes, pub_key.clone(), secret);
+        let bytes = serialization::payload(&vec, 45, &secret, "hello_confirm");
+        return (bytes, pb_key, secret);
     }
 
     fn not_time() -> Option<i64> {
@@ -171,10 +154,9 @@ mod test {
             return Some(n);
         } else {
             return None;
-
         }
-
     }
+
     fn time_within(sent_tm: i64, now_tm: i64) -> bool {
         if now_tm <= sent_tm { true } else { false }
     }
@@ -182,8 +164,8 @@ mod test {
     #[test]
     fn serialization_test_header_msg() {
         let (mbytes, _, _) = pong_host();
-        let header_str = String::from_utf8(mbytes[0..18].to_vec()).expect("Found invalid UTF-8");
-        assert_eq!(header_str, "ipv4_hello_confirm");
+        let header_str = String::from_utf8(mbytes[0..13].to_vec()).expect("Found invalid UTF-8");
+        assert_eq!(header_str, "hello_confirm");
     }
 
     #[test]
@@ -198,11 +180,10 @@ mod test {
     #[test]
     fn serialization_test_packet_header() {
         let (mbytes, _, _) = pong_host();
-        serialization::on_pong(mbytes.clone(), 8);
 
         match serialization::on_pong(mbytes, 8) {
             Some(ngb) => assert_eq!(ngb.get_endpoint().ip_address, "224.0.0.3"),
-            _ => assert_eq!(false, true),
+            _ => assert!(false),
         };
     }
 }

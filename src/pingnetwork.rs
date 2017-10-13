@@ -13,8 +13,8 @@ const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
 
-pub fn UDPsocket(ipadr: &String, port: &String) -> (UdpSocket, SocketAddr) {
-    let ip_and_port = format!("{}:{}", ipadr.clone(), port);
+pub fn UDPsocket(ipadr: &str, port: &str) -> (UdpSocket, SocketAddr) {
+    let ip_and_port = format!("{}:{}", ipadr, port);
     let saddr: SocketAddr = ip_and_port.parse().unwrap();
     let socket = match UdpSocket::bind(&saddr) {
         Ok(s) => s,
@@ -23,12 +23,10 @@ pub fn UDPsocket(ipadr: &String, port: &String) -> (UdpSocket, SocketAddr) {
     (socket, saddr)
 }
 
-pub fn dcod(mstr: String) -> String {
-    let dstr = match decode_str(mstr.clone()) {
+pub fn dcod(mstr: &str) -> String {
+    let dstr = match decode_str(mstr.clone()){
         Some(v) => v,
-        _ => {
-            panic!("Failed to decode {}", mstr);
-        }
+        _ => { panic!("Failed to decode {}", mstr); }
     };
     dstr
 }
@@ -47,24 +45,20 @@ pub struct Multicast_Net {
 
 impl Multicast_Net {
     pub fn new(
-        rx_ip: String,
-        rx_udp: String,
-        pro_vec: Vec<&String>,
+        rx_ip: &str,
+        rx_udp: &str,
+        pro_vec: Vec<&str>,
         secret: [u8; 64],
     ) -> Multicast_Net {
-        let (rx_udpsock, _) = UDPsocket(&rx_ip, &rx_udp);
-        let (tx_udpsock, ip_addr) = UDPsocket(&dcod(pro_vec[2].clone()), &dcod(pro_vec[3].clone()));
-        match tx_udpsock.set_multicast_ttl_v4(1) {
-            Ok(n) => n,
-            Err(e) => panic!("Failed to set multicast ttl {}", e),
-        };
+        let (rx_udpsock, _) = UDPsocket(rx_ip, rx_udp);
+        let (tx_udpsock, ip_addr) = UDPsocket(&dcod(&pro_vec[2]), &dcod(&pro_vec[3]));
 
         Multicast_Net {
             tx: tx_udpsock,
             rx: rx_udpsock,
             secret: secret,
             ipaddr: ip_addr,
-            buf: serialization::payload(&pro_vec, 0, &secret, "ipv4_hello".to_string()),
+            buf: serialization::payload(&pro_vec, 0, &secret, "ipv4_hello"),
             shutdown: false,
             packet_sent: false,
             st_time: time::get_time().sec,
@@ -167,38 +161,38 @@ impl Multicast_Net {
 
 #[cfg(test)]
 mod test {
-    use time;
-    use serialization;
-    use edcert::ed25519;
-    use base64::{decode, encode};
-    use bytes::{BufMut, BytesMut};
-    use pingnetwork::Multicast_Net;
+	use time;
+	use serialization;
+	use edcert::ed25519;
+	use base64::{decode, encode};
+	use bytes::{BufMut, BytesMut};
+	use pingnetwork::{Multicast_Net};
 
 
-    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String, [u8; 64]) {
-        let (psk, msk) = ed25519::generate_keypair();
-        return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
-
-    }
-
+	fn encodeVal(
+		udp_port: &str, 
+		ip_address: &str
+	)-> (String, String, String, [u8; 64]){
+		let (psk, msk) = ed25519::generate_keypair();
+		return (encode(&ip_address), encode(&udp_port), encode(&psk), msk);
+	
+	}
+	
     #[test]
-    fn test_network_returned() {
-        let (ip_addr, udp_port, pub_key, secret) =
-            encodeVal("41235".to_string(), "224.0.0.3".to_string());
-        let cloned_pub_key = pub_key.clone();
-        let mut vec = Vec::new();
-        vec.push(&pub_key);
-        vec.push(&cloned_pub_key);
-        vec.push(&ip_addr);
-        vec.push(&udp_port);
-        let bytes =
-            serialization::payload(&vec.clone(), 45, &secret, "ipv4_hello_confirm".to_string());
-        let mut network =
-            Multicast_Net::new("224.0.0.8".to_string(), "41239".to_string(), vec, secret);
+	fn test_network_returned() {
+		let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
+		let cloned_pub_key = pub_key.clone();
+		let mut vec: Vec<&str> = Vec::new();
+		vec.push(&pub_key);
+		vec.push(&cloned_pub_key);
+		vec.push(&ip_addr);
+		vec.push(&udp_port);
+		let bytes = serialization::payload(&vec, 45, &secret, "hello_confirm");
+		let mut network = Multicast_Net::new("224.0.0.8","41239", vec, secret );
         network.parse_packet(bytes);
         assert_eq!(1, network.nodes.get_neighbors().len());
-    }
+	}
 
 
-
+	
 }

@@ -2,8 +2,8 @@ use types::ENDPOINT;
 use base64::decode;
 
 
-pub fn decode_str(mstr: String) -> Option<String> {
-    match decode(&mstr) {
+pub fn decode_str(mstr: &str) -> Option<String> {
+    match decode(mstr) {
         Ok(v) => {
             match String::from_utf8(v) {
                 Ok(v) => {
@@ -37,11 +37,11 @@ impl Neighbor {
         let num;
         let udp_port;
         let negh: Neighbor;
-        udp_port = match decode_str(vec_fields[4].to_string()) {
+        udp_port = match decode_str(vec_fields[4]) {
             Some(v) => v,
             _ => return None,
         };
-        ip_address = match decode_str(vec_fields[3].to_string()) {
+        ip_address = match decode_str(vec_fields[3]) {
             Some(v) => v,
             _ => return None,
         };
@@ -90,19 +90,18 @@ impl Neighbor {
 
 #[cfg(test)]
 mod test {
-    use types::ENDPOINT;
-    use base64::{decode, encode};
+    use base64::{ encode};
     use neighbor::Neighbor;
     use edcert::ed25519;
 
 
-    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String) {
-        let (psk, msk) = ed25519::generate_keypair();
+    fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String) {
+        let (psk, _) = ed25519::generate_keypair();
         return (encode(&ip_address), encode(&udp_port), encode(&psk));
     }
 
     fn given_neighbor() -> Option<(Neighbor, String)> {
-        let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
+        let (ip_addr, udp_port, pub_key) = encodeVal("41235", "224.0.0.3");
         let testnum = 45;
         let cloned_pub_key = pub_key.clone();
         let not_applicable = "N/A";
@@ -114,7 +113,7 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
-        vec.push(not_applicable.clone());
+        vec.push(not_applicable);
         let ngb = match Neighbor::new(vec, testnum) {
             Some(v) => v,
             _ => {
@@ -131,7 +130,7 @@ mod test {
             Some((n, k)) => assert_eq!(n.get_pub_key(), &k),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }
@@ -142,7 +141,7 @@ mod test {
             Some((n, k)) => assert_eq!(n.get_payment_address(), &k),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }
@@ -150,10 +149,10 @@ mod test {
     #[test]
     fn neighbor_test_end_port_udp_port() {
         match given_neighbor() {
-            Some((n, k)) => assert_eq!(n.get_endpoint().udp_port, "41235"),
+            Some((n, _)) => assert_eq!(n.get_endpoint().udp_port, "41235"),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }
@@ -161,10 +160,10 @@ mod test {
     #[test]
     fn neighbor_test_end_port_ip_address() {
         match given_neighbor() {
-            Some((n, k)) => assert_eq!(n.get_endpoint().ip_address, "224.0.0.3"),
+            Some((n, _)) => assert_eq!(n.get_endpoint().ip_address, "224.0.0.3"),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }
@@ -175,7 +174,7 @@ mod test {
             Some((n, _)) => assert_eq!(n.get_seqnum(), 3),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }
@@ -186,7 +185,7 @@ mod test {
             Some((n, _)) => assert_eq!(n.get_active(), 45),
             _ => {
                 println!("Failed Neighbor asserting false");
-                assert_eq!(false, false);
+                assert!(false);
             }
         };
     }

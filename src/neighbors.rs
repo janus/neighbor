@@ -45,7 +45,7 @@ impl Neighbors {
         let neighbors: Vec<&Neighbor> = self.neighbrs.iter().map(|(_, nbr)| nbr.clone()).collect();
         neighbors
     }
-    
+
     ///https://stackoverflow.com/questions/28909583/removing-entries-from-a-hashmap-based-on-value
     pub fn remove_inactive_neighbors(&mut self) {
         let empties: Vec<_> = self.neighbrs
@@ -77,8 +77,7 @@ mod test {
 
     fn neighbor_one() -> Option<Neighbor> {
         let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
-        let mut testnum = 45;
-        let cloned_pub_key = pub_key.clone();
+        let testnum = 45;
         let not_applicable = "N/A";
         let sequm = "3";
         let mut vec = Vec::new();
@@ -88,14 +87,13 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
-        vec.push(not_applicable.clone());
+        vec.push(not_applicable);
         return Neighbor::new(vec, testnum);
     }
 
     fn neighbor_two() -> Option<Neighbor> {
         let (ip_addr, udp_port, pub_key) = encodeVal("51235".to_string(), "224.0.0.7".to_string());
-        let mut testnum = 45;
-        let cloned_pub_key = pub_key.clone();
+        let testnum = 45;
         let not_applicable = "N/A";
         let sequm = "40";
         let mut vec = Vec::new();
@@ -105,15 +103,14 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
-        vec.push(not_applicable.clone());
+        vec.push(not_applicable);
         return Neighbor::new(vec, testnum);
     }
 
 
     fn neighbor_three() -> Option<Neighbor> {
         let (ip_addr, udp_port, pub_key) = encodeVal("44235".to_string(), "224.0.0.2".to_string());
-        let mut testnum = 42;
-        let cloned_pub_key = pub_key.clone();
+        let testnum = 42;
         let not_applicable = "N/A";
         let sequm = "3";
         let mut vec = Vec::new();
@@ -123,7 +120,7 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
-        vec.push(not_applicable.clone());
+        vec.push(not_applicable);
         return Neighbor::new(vec, testnum);
     }
 
@@ -139,7 +136,7 @@ mod test {
         vec.push(&ip_addr);
         vec.push(&udp_port);
         vec.push(sequm);
-        vec.push(not_applicable.clone());
+        vec.push(not_applicable);
         Neighbor::new(vec, testnum)
     }
 
@@ -169,7 +166,7 @@ mod test {
     fn neighbors_test_number_neighbors() {
         let mut ngbrs = given_neighbors();
 
-        let mut vec_neighbors = ngbrs.get_neighbors();
+        let  vec_neighbors = ngbrs.get_neighbors();
 
         assert_eq!(vec_neighbors.len(), 4);
     }
@@ -182,7 +179,7 @@ mod test {
 
         ngbrs.remove_inactive_neighbors();
 
-        let mut vec_neighbors = ngbrs.get_neighbors();
+        let vec_neighbors = ngbrs.get_neighbors();
 
         assert_eq!(vec_neighbors.len(), 2);
     }
