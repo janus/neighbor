@@ -12,6 +12,7 @@ mod neighbors;
 mod types;
 mod pingnetwork;
 
+//This can just be removed (jkilpatr)
 #[cfg(test)]
 mod tests {
     #[test]
