@@ -32,7 +32,7 @@ pub struct Neighbor {
 }
 
 impl Neighbor {
-    pub fn new(vec_fields: Vec<&str>, ttnum: i32) -> Option<Neighbor> {
+    pub fn new(vec_fields: &Vec<&str>, ttnum: i32) -> Option<Neighbor> {
         let ip_address;
         let end_port: ENDPOINT;
         let num;
@@ -90,7 +90,7 @@ impl Neighbor {
 
 #[cfg(test)]
 mod test {
-    use base64::{ encode};
+    use base64::encode;
     use neighbor::Neighbor;
     use edcert::ed25519;
 
@@ -114,7 +114,7 @@ mod test {
         vec.push(&udp_port);
         vec.push(sequm);
         vec.push(not_applicable); //This is a hack to take the place of hash
-        let ngb = match Neighbor::new(vec, testnum) {
+        let ngb = match Neighbor::new(&vec, testnum) {
             Some(v) => v,
             _ => {
                 println!("Bad protocol");

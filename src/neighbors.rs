@@ -20,7 +20,7 @@ impl Neighbors {
         self.neighbrs.insert(neighbr.get_pub_key().clone(), neighbr);
     }
 
-    fn delete_with_pub_key(&mut self, pub_key: &String) {
+    fn delete_with_pub_key(&mut self, pub_key: &str) {
         self.neighbrs.remove(pub_key);
     }
 
@@ -29,7 +29,7 @@ impl Neighbors {
         self.delete_with_pub_key(&neighbr.get_pub_key());
     }
 
-    pub fn get_neighbor(&mut self, pub_key: &String) -> Option<&Neighbor> {
+    pub fn get_neighbor(&mut self, pub_key: &str) -> Option<&Neighbor> {
         self.neighbrs.get(pub_key)
     }
 
@@ -66,17 +66,17 @@ mod test {
     use types::ENDPOINT;
     use neighbor::Neighbor;
     use neighbors::Neighbors;
-    use base64::{decode, encode};
+    use base64::encode;
     use edcert::ed25519;
 
 
-    fn encodeVal(udp_port: String, ip_address: String) -> (String, String, String) {
+    fn encodeVal(udp_port: &str, ip_address: &str) -> (String, String, String) {
         let (psk, _) = ed25519::generate_keypair();
         return (encode(&ip_address), encode(&udp_port), encode(&psk));
     }
 
     fn neighbor_one() -> Option<Neighbor> {
-        let (ip_addr, udp_port, pub_key) = encodeVal("41235".to_string(), "224.0.0.3".to_string());
+        let (ip_addr, udp_port, pub_key) = encodeVal("41235", "224.0.0.3");
         let testnum = 45;
         let not_applicable = "N/A";
         let sequm = "3";
@@ -88,11 +88,11 @@ mod test {
         vec.push(&udp_port);
         vec.push(sequm);
         vec.push(not_applicable);//This is a hack to take the place of hash
-        return Neighbor::new(vec, testnum);
+        return Neighbor::new(&vec, testnum);
     }
 
     fn neighbor_two() -> Option<Neighbor> {
-        let (ip_addr, udp_port, pub_key) = encodeVal("51235".to_string(), "224.0.0.7".to_string());
+        let (ip_addr, udp_port, pub_key) = encodeVal("51235", "224.0.0.7");
         let testnum = 45;
         let not_applicable = "N/A";
         let sequm = "40";
@@ -104,12 +104,12 @@ mod test {
         vec.push(&udp_port);
         vec.push(sequm);
         vec.push(not_applicable);//This is a hack to take the place of hash
-        return Neighbor::new(vec, testnum);
+        return Neighbor::new(&vec, testnum);
     }
 
 
     fn neighbor_three() -> Option<Neighbor> {
-        let (ip_addr, udp_port, pub_key) = encodeVal("44235".to_string(), "224.0.0.2".to_string());
+        let (ip_addr, udp_port, pub_key) = encodeVal("44235", "224.0.0.2");
         let testnum = 42;
         let not_applicable = "N/A";
         let sequm = "3";
@@ -121,11 +121,11 @@ mod test {
         vec.push(&udp_port);
         vec.push(sequm);
         vec.push(not_applicable);//This is a hack to take the place of hash
-        return Neighbor::new(vec, testnum);
+        return Neighbor::new(&vec, testnum);
     }
 
     fn neighbor_four() -> Option<Neighbor> {
-        let (ip_addr, udp_port, pub_key) = encodeVal("41295".to_string(), "224.0.0.1".to_string());
+        let (ip_addr, udp_port, pub_key) = encodeVal("41295", "224.0.0.1");
         let testnum = 42;
         let not_applicable = "N/A";
         let sequm = "3";
@@ -137,7 +137,7 @@ mod test {
         vec.push(&udp_port);
         vec.push(sequm);
         vec.push(not_applicable);//This is a hack to take the place of hash
-        Neighbor::new(vec, testnum)
+        Neighbor::new(&vec, testnum)
     }
 
     fn given_neighbors() -> Neighbors {

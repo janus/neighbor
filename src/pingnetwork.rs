@@ -32,32 +32,19 @@ pub fn dcod(mstr: &str) -> String {
 }
 
 pub struct Multicast_Net {
-    tx: UdpSocket,
-    rx: UdpSocket,
     secret: [u8; 64],
     shutdown: bool,
-    packet_sent: bool,
+    packet_sent: bool,          
     buf: BytesMut,
     st_time: i64,
-    ipaddr: SocketAddr,
     pub nodes: Neighbors,
 }
 
 impl Multicast_Net {
-    pub fn new(
-        rx_ip: &str,
-        rx_udp: &str,
-        pro_vec: Vec<&str>,
-        secret: [u8; 64],
-    ) -> Multicast_Net {
-        let (rx_udpsock, _) = UDPsocket(rx_ip, rx_udp);
-        let (tx_udpsock, ip_addr) = UDPsocket(&dcod(&pro_vec[2]), &dcod(&pro_vec[3]));
+    pub fn new(pro_vec: &Vec<&str>, secret: [u8; 64]) -> Multicast_Net {
 
         Multicast_Net {
-            tx: tx_udpsock,
-            rx: rx_udpsock,
             secret: secret,
-            ipaddr: ip_addr,
             buf: serialization::payload(&pro_vec, 0, &secret, "ipv4_hello"),
             shutdown: false,
             packet_sent: false,
@@ -66,8 +53,8 @@ impl Multicast_Net {
         }
     }
 
-    pub fn parse_packet(&mut self, buf: BytesMut) {
-        match serialization::on_pong(buf, self.nodes.get_host_status_num()) {
+    pub fn parse_packet(&mut self, buf: &BytesMut) {
+        match serialization::on_pong(&buf, self.nodes.get_host_status_num()) {
             Some(ngb) => {
                 self.nodes.insert_neighbor(ngb);
             }
@@ -75,15 +62,15 @@ impl Multicast_Net {
         };
     }
 
-    pub fn read_udpsocket(&mut self, _: &mut Poll, token: Token, _: Ready) {
+    pub fn read_udpsocket(&mut self,rx: &UdpSocket,  _: &mut Poll, token: Token, _: Ready) {
         let mut current_time = 0 as i64;
         match token {
             LISTENER => {
                 let mut buf: BytesMut = BytesMut::with_capacity(BUFFER_CAPACITY);
-                match self.rx.recv_from(&mut buf[..]) {
-                    Ok(Some((len, address))) => {
+                match rx.recv_from(&mut buf[..]) {
+                    Ok(Some((_len, _address))) => {
                         current_time = time::get_time().sec;
-                        self.parse_packet(buf);
+                        self.parse_packet(&buf);
                     }
                     Ok(_) => {}
                     Err(e) => {
@@ -98,13 +85,13 @@ impl Multicast_Net {
         }
     }
 
-    pub fn send_packet(&mut self, _: &mut Poll, token: Token, _: Ready) {
+    pub fn send_packet(&mut self, tx: &UdpSocket, ipaddr: &SocketAddr, _: &mut Poll, token: Token, _: Ready) {
         if self.packet_sent {
             return;
         }
         match token {
             SENDER => {
-                match self.tx.send_to(&self.buf[..], &self.ipaddr) {
+                match tx.send_to(&self.buf[..], &ipaddr) {
                     Ok(Some(size)) if size == self.buf.len() => {
                         self.packet_sent = true;
                         self.st_time = time::get_time().sec + 120;
@@ -119,7 +106,7 @@ impl Multicast_Net {
                         println!(
                             "Error send UDP:: {:?} and the sock_addr is {:?}",
                             e,
-                            &self.ipaddr
+                            &ipaddr
                         );
                     }
                 };
@@ -128,13 +115,16 @@ impl Multicast_Net {
         }
     }
 
-    pub fn start_net(&mut self) {
+    pub fn start_net(&mut self, rx_ip: &str, rx_udp: &str, pro_vec: &Vec<&str>) {
         let mut poll = Poll::new().unwrap();
 
-        poll.register(&self.tx, SENDER, Ready::writable(), PollOpt::edge())
+        let (rx_udpsock, _) = UDPsocket(rx_ip, rx_udp);
+        let (tx_udpsock, ip_addr) = UDPsocket(&dcod(&pro_vec[2]), &dcod(&pro_vec[3]));
+
+        poll.register(&tx_udpsock, SENDER, Ready::writable(), PollOpt::edge())
             .unwrap();
 
-        poll.register(&self.rx, LISTENER, Ready::readable(), PollOpt::edge())
+        poll.register(&rx_udpsock, LISTENER, Ready::readable(), PollOpt::edge())
             .unwrap();
 
         let mut events = Events::with_capacity(1024);
@@ -143,30 +133,25 @@ impl Multicast_Net {
             poll.poll(&mut events, None).unwrap();
             for event in &events {
                 if event.readiness().is_readable() {
-                    self.read_udpsocket(&mut poll, event.token(), event.readiness());
+                    self.read_udpsocket(&rx_udpsock, &mut poll, event.token(), event.readiness());
                 }
                 if event.readiness().is_writable() {
-                    self.send_packet(&mut poll, event.token(), event.readiness());
+                    self.send_packet(&tx_udpsock, &ip_addr, &mut poll, event.token(), event.readiness());
                 }
             }
         }
     }
 
-    pub fn close(self) {
-        drop(self.tx);
-        drop(self.rx);
-    }
 }
 
 
 #[cfg(test)]
 mod test {
-	use time;
 	use serialization;
 	use edcert::ed25519;
-	use base64::{decode, encode};
+	use base64::encode;
 	use bytes::{BufMut, BytesMut};
-	use pingnetwork::{Multicast_Net};
+	use pingnetwork::Multicast_Net;
 
 
 	fn encodeVal(
@@ -188,8 +173,8 @@ mod test {
 		vec.push(&ip_addr);
 		vec.push(&udp_port);
 		let bytes = serialization::payload(&vec, 45, &secret, "hello_confirm");
-		let mut network = Multicast_Net::new("224.0.0.8","41239", vec, secret );
-        network.parse_packet(bytes);
+		let mut network = Multicast_Net::new( &vec, secret );
+        network.parse_packet(&bytes);
         assert_eq!(1, network.nodes.get_neighbors().len());
 	}
 

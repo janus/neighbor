@@ -45,7 +45,7 @@ pub fn payload(
     rslt
 }
 
-pub fn on_pong(packet: BytesMut, active: i32) -> Option<Neighbor> {
+pub fn on_pong(packet: &BytesMut, active: i32) -> Option<Neighbor> {
     let vec_str: Vec<&str>;
     let payload;
     let pub_key;
@@ -76,7 +76,7 @@ pub fn on_pong(packet: BytesMut, active: i32) -> Option<Neighbor> {
         };
         if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
 
-            match Neighbor::new(vec_str, active) {
+            match Neighbor::new(&vec_str, active) {
                 Some(ngb) => { return Some(ngb);}
                 _ => { return None; }
             };
@@ -181,7 +181,7 @@ mod test {
     fn serialization_test_packet_header() {
         let (mbytes, _, _) = pong_host();
 
-        match serialization::on_pong(mbytes, 8) {
+        match serialization::on_pong(&mbytes, 8) {
             Some(ngb) => assert_eq!(ngb.get_endpoint().ip_address, "224.0.0.3"),
             _ => assert!(false),
         };
