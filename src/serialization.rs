@@ -9,14 +9,15 @@ const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
 const hello_confirm: &'static str ="hello_confirm";
 
-pub fn decode_key(mstr: &str) -> Option<Vec<u8>> {
+pub fn decode_key(mstr: &str) -> Vec<u8> {
+    let empty_result: Vec<u8> = Vec::new();
     match decode(mstr) {
         Ok(v) => {
-            return Some(v);
+            return v;
         }
         Err(e) => {
             println!("Failed to decode  {}", e);
-            return None;
+            return empty_result;
         }
     };
 }
@@ -68,14 +69,9 @@ pub fn on_pong(packet: &BytesMut, active: i32) -> Option<Neighbor> {
                 return None;
             }
         };
-        pub_key = match decode_key(&vec_str[1]) {
-            Some(v) => v,
-            _ => { return None; }
-        };
-        sig = match decode_key(&vec_str[vec_str.len() - 1]) {
-            Some(v) => v,
-            _ => { return None; }
-        };
+        pub_key = decode_key(&vec_str[1]);
+        sig = decode_key(&vec_str[vec_str.len() - 1]);
+
         if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
 
             match Neighbor::new(&vec_str, active) {
