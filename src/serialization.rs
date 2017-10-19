@@ -7,6 +7,8 @@ use base64::{decode, encode};
 
 const BUFFER_CAPACITY_MESSAGE: usize = 400;
 
+const hello_confirm: &'static str ="hello_confirm";
+
 pub fn decode_key(mstr: &str) -> Option<Vec<u8>> {
     match decode(mstr) {
         Ok(v) => {
@@ -88,7 +90,7 @@ pub fn on_pong(packet: &BytesMut, active: i32) -> Option<Neighbor> {
 pub fn match_header(packet: &BytesMut) -> bool {
     match str::from_utf8(&packet[0..13]) {
         Ok(v) => {
-            return  "hello_confirm" == v;
+            return  hello_confirm == v;
         },
         Err(e) => {
             println!("Found invalid UTF-8 {:?}", e);
