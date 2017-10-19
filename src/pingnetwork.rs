@@ -12,6 +12,8 @@ const BUFFER_CAPACITY: usize = 800;
 const LISTENER: Token = Token(0);
 const SENDER: Token = Token(1);
 
+const HELLO: &'static str ="hello";
+
 
 pub fn UDPsocket(ipadr: &str, port: &str) -> (UdpSocket, SocketAddr) {
     let ip_and_port = format!("{}:{}", ipadr, port);
@@ -45,7 +47,7 @@ impl Multicast_Net {
 
         Multicast_Net {
             secret: secret,
-            buf: serialization::payload(&pro_vec, 0, &secret, "ipv4_hello"),
+            buf: serialization::payload(&pro_vec, 0, &secret, HELLO),
             shutdown: false,
             packet_sent: false,
             st_time: time::get_time().sec,
@@ -178,6 +180,17 @@ mod test {
         assert_eq!(1, network.nodes.get_neighbors().len());
 	}
 
-
+    #[test]
+	fn test_network() {
+		let (ip_addr, udp_port, pub_key, secret) = encodeVal("41235", "224.0.0.3");
+		let cloned_pub_key = pub_key.clone();
+		let mut vec: Vec<&str> = Vec::new();
+		vec.push(&pub_key);
+		vec.push(&cloned_pub_key);
+		vec.push(&ip_addr);
+		vec.push(&udp_port);
+		let mut network = Multicast_Net::new( &vec, secret );
+        network.start_net("224.0.0.7", "43521", &vec);
+	}
 	
 }

@@ -6,8 +6,7 @@ use edcert::ed25519;
 use base64::{decode, encode};
 
 const BUFFER_CAPACITY_MESSAGE: usize = 400;
-
-const hello_confirm: &'static str ="hello_confirm";
+const HELLO_CONFIRM: &'static str ="hello_confirm";
 
 pub fn decode_key(mstr: &str) -> Vec<u8> {
     let empty_result: Vec<u8> = Vec::new();
@@ -73,7 +72,6 @@ pub fn on_pong(packet: &BytesMut, active: i32) -> Option<Neighbor> {
         sig = decode_key(&vec_str[vec_str.len() - 1]);
 
         if ed25519::verify(payload.as_bytes(), &sig, &pub_key) {
-
             match Neighbor::new(&vec_str, active) {
                 Some(ngb) => { return Some(ngb);}
                 _ => { return None; }
@@ -86,7 +84,7 @@ pub fn on_pong(packet: &BytesMut, active: i32) -> Option<Neighbor> {
 pub fn match_header(packet: &BytesMut) -> bool {
     match str::from_utf8(&packet[0..13]) {
         Ok(v) => {
-            return  hello_confirm == v;
+            return  HELLO_CONFIRM == v;
         },
         Err(e) => {
             println!("Found invalid UTF-8 {:?}", e);
